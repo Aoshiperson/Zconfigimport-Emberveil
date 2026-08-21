@@ -1,0 +1,13 @@
+## Interface: 11507
+## Title: Zconfigimport
+## Notes: 批量导入宏/技能摆放/键位绑定
+## Author: You
+## Version: 1.0
+## X-Note: 上面的 Interface 版本号可能跟你的客户端对不上，如果插件在
+## X-Note: 游戏内“插件列表”里显示成灰色/不可用，把这行数字换成你客户端
+## X-Note: 实际版本（游戏里输入 /dump select(4, GetBuildInfo()) 能查到）。
+
+Zconfigimport.lua
+Priest.lua
+Warrior.lua
+Mage.lua
