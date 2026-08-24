@@ -1,11 +1,14 @@
 -- Zconfigimport.lua —— 公共逻辑：键位绑定 + 按职业加载宏/技能摆放
--- 用法: 游戏内输入 /mkb 执行导入
+-- 用法: 
+--   /mkb        - 执行全部（键位 + 宏创建 + 放置）
+--   /mkb bind   - 仅执行键位导入
+--   /mkb macro  - 仅创建当前职业的宏
+--   /mkb place  - 仅放置当前职业的宏与技能
 
 local ADDON_PREFIX = "|cff33ff99MyKeybinds|r"
 local ACTION_BUTTONS_PER_PAGE = 12
 
--- 兼容层：部分客户端（如 1.12 系列）没有全局 print，这里做个兜底，
--- 有 print 就用 print，没有就退回 DEFAULT_CHAT_FRAME:AddMessage。
+-- 兼容层：部分客户端（如 1.12 系列）没有全局 print，这里做个兜底
 local print = (type(print) == "function") and print or function(msg)
     if DEFAULT_CHAT_FRAME then
         DEFAULT_CHAT_FRAME:AddMessage(msg)
@@ -57,7 +60,6 @@ bind BUTTON5 CLICK BT4Button60:Keybind
 -- 工具函数
 --------------------------------------------------------------------------
 
--- (行, 列) -> 动作条格子编号。统一放这里，避免各处手写 (row-1)*12+col
 local function GetActionSlot(row, col)
     return (row - 1) * ACTION_BUTTONS_PER_PAGE + col
 end
@@ -74,7 +76,7 @@ local function ParseBindingLine(line)
 end
 
 --------------------------------------------------------------------------
--- 键位绑定
+-- 1. 键位绑定模块
 --------------------------------------------------------------------------
 
 local function ApplyBindings()
@@ -99,7 +101,7 @@ local function ApplyBindings()
         end
     end
 
-    SaveBindings(2)
+    SaveBindings(1)
 
     print(string.format("%s 键位导入完成：成功 %d 条，失败 %d 条", ADDON_PREFIX, okCount, failCount))
 
@@ -118,14 +120,9 @@ local function ApplyBindings()
 end
 
 --------------------------------------------------------------------------
--- 按职业加载宏 / 摆放 / 技能
+-- 2. 宏创建模块
 --------------------------------------------------------------------------
 
--- 宏数据约定为 { name, icon, body, bIsLocal, bIsPerCharacter }，
--- 对应本客户端 CreateMacro 的 5 参数签名：
---   CreateMacro("name", iconIndex, "body", bIsLocal, bIsPerCharacter)
--- 第 4 位 bIsLocal 通常是 nil，这里显式按下标取值而不是 unpack(entry)，
--- 避免 Lua 5.1 对带 nil 空洞的 table 长度判断不稳定，导致参数错位或丢失。
 local function CreateMacroFromEntry(entry)
     local name, icon, body, bIsLocal, bIsPerCharacter =
         entry[1], entry[2], entry[3], entry[4], entry[5]
@@ -144,6 +141,23 @@ local function CreateClassMacros(macroTable)
     end
     return okCount, failCount
 end
+
+local function ApplyClassMacros()
+    local _, classToken = UnitClass("player")
+    local macroTable = _G["MACROS_BY_CLASS_" .. classToken]
+
+    if not macroTable then
+        print(string.format("%s 没找到职业 %s 对应的宏数据", ADDON_PREFIX, classToken))
+        return
+    end
+
+    local macroOk, macroFail = CreateClassMacros(macroTable)
+    print(string.format("%s [%s] 宏创建完成：成功 %d / 失败 %d", ADDON_PREFIX, classToken, macroOk, macroFail))
+end
+
+--------------------------------------------------------------------------
+-- 3. 宏与技能放置模块
+--------------------------------------------------------------------------
 
 local function PlaceClassMacros(placementTable)
     local okCount, failCount = 0, 0
@@ -164,9 +178,6 @@ local function PlaceClassMacros(placementTable)
     return okCount, failCount
 end
 
--- 本客户端 PickupSpell 的签名是 PickupSpell(spellID, "BookType")，
--- 需要法术书里的序号（数字），不能直接传法术名字符串。
--- 这里先按名字遍历法术书找到对应序号，再调用 PickupSpell。
 local function FindSpellBookIndex(spellName)
     local index = 1
     while true do
@@ -201,40 +212,42 @@ local function PlaceClassSpells(spellTable)
     return okCount, failCount
 end
 
-local function ApplyClassData()
+local function ApplyClassPlacement()
     local _, classToken = UnitClass("player")
-
-    local macroTable = _G["MACROS_BY_CLASS_" .. classToken]
     local placementTable = _G["MACRO_PLACEMENT_" .. classToken]
     local spellTable = _G["SPELLS_BY_CLASS_" .. classToken]
 
-    if not macroTable then
-        print(string.format("%s 没找到职业 %s 对应的数据文件", ADDON_PREFIX, classToken))
+    if not placementTable and not spellTable then
+        print(string.format("%s 没找到职业 %s 对应的摆放数据", ADDON_PREFIX, classToken))
         return
     end
 
-    local macroOk, macroFail = CreateClassMacros(macroTable)
     local placeOk, placeFail = PlaceClassMacros(placementTable)
     local spellOk, spellFail = PlaceClassSpells(spellTable)
 
     print(string.format(
-        "%s [%s] 宏：成功 %d / 失败 %d，摆放：成功 %d / 失败 %d，技能摆放：成功 %d / 失败 %d",
-        ADDON_PREFIX, classToken, macroOk, macroFail, placeOk, placeFail, spellOk, spellFail
+        "%s [%s] 摆放完成 -> 宏摆放：成功 %d / 失败 %d，技能摆放：成功 %d / 失败 %d",
+        ADDON_PREFIX, classToken, placeOk, placeFail, spellOk, spellFail
     ))
 end
 
 --------------------------------------------------------------------------
--- 入口
+-- 入口与子命令分发
 --------------------------------------------------------------------------
 
 SLASH_MYKEYBINDS1 = "/mkb"
-SlashCmdList["MYKEYBINDS"] = function()
-    ApplyBindings()
-    ApplyClassData()
-end
+SlashCmdList["MYKEYBINDS"] = function(msg)
+    msg = string.lower(string.gsub(msg or "", "^%s*(.-)%s*$", "%1"))
 
-local loginFrame = CreateFrame("Frame")
-loginFrame:RegisterEvent("PLAYER_LOGIN")
-loginFrame:SetScript("OnEvent", function()
-    print(string.format("%s 已加载，输入 /mkb 导入键位 + 职业宏/摆放", ADDON_PREFIX))
-end)
+    if msg == "bind" then
+        ApplyBindings()
+    elseif msg == "macro" then
+        ApplyClassMacros()
+    elseif msg == "place" then
+        ApplyClassPlacement()
+    else
+        ApplyBindings()
+        ApplyClassMacros()
+        ApplyClassPlacement()
+    end
+end
