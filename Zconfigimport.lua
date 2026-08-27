@@ -52,8 +52,8 @@ bind NUMPAD2 RAIDTARGET6
 bind NUMPAD4 RAIDTARGET4
 bind NUMPAD6 RAIDTARGET2
 bind NUMPAD7 RAIDTARGET1
-bind NUMPAD8 NONE
-bind BUTTON5 CLICK BT4Button60:Keybind
+bind NUMPAD8 RAIDTARGET8
+bind V MULTIACTIONBAR1BUTTON7
 ]]
 
 --------------------------------------------------------------------------
