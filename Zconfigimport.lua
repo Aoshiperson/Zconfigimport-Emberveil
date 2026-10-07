@@ -1,5 +1,5 @@
 -- Zconfigimport.lua —— 公共逻辑：界面设置 + 键位绑定 + 按职业加载宏/技能摆放
--- 用法: 
+-- 用法:
 --   /mkb        - 执行全部（界面设置 + 键位 + 宏创建）
 --   /mkb ui     - 仅应用界面设置
 --   /mkb bind   - 仅执行键位导入
@@ -29,8 +29,8 @@ bind BUTTON4 NONE
 bind R ACTIONBUTTON8
 bind 0 NONE
 bind - NONE
-bind SHIFT-1 ACTIONPAGE1
-bind SHIFT-2 ACTIONPAGE2
+bind SHIFT-9 ACTIONPAGE1
+bind SHIFT-0 ACTIONPAGE2
 bind SHIFT-3 NONE
 bind SHIFT-4 NONE
 bind SHIFT-5 NONE
