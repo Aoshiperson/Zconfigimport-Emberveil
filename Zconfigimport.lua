@@ -1,6 +1,7 @@
--- Zconfigimport.lua —— 公共逻辑：键位绑定 + 按职业加载宏/技能摆放
+-- Zconfigimport.lua —— 公共逻辑：界面设置 + 键位绑定 + 按职业加载宏/技能摆放
 -- 用法: 
---   /mkb        - 执行全部（键位 + 宏创建 + 放置）
+--   /mkb        - 执行全部（界面设置 + 键位 + 宏创建）
+--   /mkb ui     - 仅应用界面设置
 --   /mkb bind   - 仅执行键位导入
 --   /mkb macro  - 仅创建当前职业的宏
 --   /mkb place  - 仅放置当前职业的宏与技能
@@ -34,6 +35,7 @@ bind SHIFT-3 NONE
 bind SHIFT-4 NONE
 bind SHIFT-5 NONE
 bind SHIFT-6 NONE
+bind SHIFT-v NONE
 bind SHIFT-MOUSEWHEELUP ACTIONPAGE1
 bind SHIFT-MOUSEWHEELDOWN ACTIONPAGE2
 bind G ACTIONBUTTON10
@@ -57,6 +59,27 @@ bind V MULTIACTIONBAR1BUTTON7
 ]]
 
 --------------------------------------------------------------------------
+-- 界面设置数据
+--------------------------------------------------------------------------
+
+local UI_SETTINGS = {
+    SHOW_BUFF_DURATIONS = "1",
+    SHOW_PARTY_PETS = "1",
+    SHOW_TARGET_OF_TARGET = "1",
+    SHOW_TARGET_OF_TARGET_STATE = "5",
+    AUTO_QUEST_WATCH = "1",
+    QUEST_FADING_DISABLE = "1",
+    SHOW_COMBAT_TEXT = "1",
+    COMBAT_TEXT_SHOW_LOW_HEALTH_MANA = "1",
+    COMBAT_TEXT_SHOW_AURAS = "1",
+    COMBAT_TEXT_SHOW_COMBAT_STATE = "1",
+    COMBAT_TEXT_SHOW_REACTIVES = "1",
+    COMBAT_TEXT_SHOW_FRIENDLY_NAMES = "1",
+    COMBAT_TEXT_SHOW_HONOR_GAINED = "1",
+    LOCK_ACTIONBAR = "1",
+}
+
+--------------------------------------------------------------------------
 -- 工具函数
 --------------------------------------------------------------------------
 
@@ -73,6 +96,25 @@ local function ParseBindingLine(line)
         command = nil
     end
     return key, command
+end
+
+--------------------------------------------------------------------------
+-- 0. 界面设置模块
+--------------------------------------------------------------------------
+
+local function ApplyUISettings()
+    local changed, same = 0, 0
+
+    for name, value in pairs(UI_SETTINGS) do
+        if _G[name] == value then
+            same = same + 1
+        else
+            _G[name] = value
+            changed = changed + 1
+        end
+    end
+
+    print(string.format("%s 界面设置完成：修改 %d 项，原本就一致 %d 项", ADDON_PREFIX, changed, same))
 end
 
 --------------------------------------------------------------------------
@@ -239,15 +281,17 @@ SLASH_MYKEYBINDS1 = "/mkb"
 SlashCmdList["MYKEYBINDS"] = function(msg)
     msg = string.lower(string.gsub(msg or "", "^%s*(.-)%s*$", "%1"))
 
-    if msg == "bind" then
+    if msg == "ui" then
+        ApplyUISettings()
+    elseif msg == "bind" then
         ApplyBindings()
     elseif msg == "macro" then
         ApplyClassMacros()
     elseif msg == "place" then
         ApplyClassPlacement()
     else
+        ApplyUISettings()
         ApplyBindings()
         ApplyClassMacros()
-        ApplyClassPlacement()
     end
 end
