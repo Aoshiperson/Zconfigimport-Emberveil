@@ -1,15 +1,15 @@
 -- Zconfigimport.lua —— 公共逻辑：界面设置 + 键位绑定 + 按职业加载宏/技能摆放
 -- 用法:
---   /mkb        - 执行全部（界面设置 + 键位 + 宏创建）
+--   /mkb        - 执行全部（界面设置 + 键位 + 宏创建 + 摆放）
 --   /mkb ui     - 仅应用界面设置
 --   /mkb bind   - 仅执行键位导入
---   /mkb macro  - 仅创建当前职业的宏
+--   /mkb macro  - 仅创建/更新当前职业的宏
 --   /mkb place  - 仅放置当前职业的宏与技能
 
 local ADDON_PREFIX = "|cff33ff99MyKeybinds|r"
 local ACTION_BUTTONS_PER_PAGE = 12
 
--- 兼容层：部分客户端（如 1.12 系列）没有全局 print，这里做个兜底
+-- 兼容层：没有全局 print 时兜底
 local print = (type(print) == "function") and print or function(msg)
     if DEFAULT_CHAT_FRAME then
         DEFAULT_CHAT_FRAME:AddMessage(msg)
@@ -18,6 +18,9 @@ end
 
 --------------------------------------------------------------------------
 -- 键位绑定数据
+-- 注意：键名必须大写。
+-- SHIFT-MOUSEWHEELUP/DOWN 在 Emberveil 里可能被拒绝（滚轮只允许绑相机缩放），
+-- 被拒绝时会出现在失败明细里，不影响其他绑定
 --------------------------------------------------------------------------
 
 local RAW_BINDINGS = [[
@@ -35,7 +38,7 @@ bind SHIFT-3 NONE
 bind SHIFT-4 NONE
 bind SHIFT-5 NONE
 bind SHIFT-6 NONE
-bind SHIFT-v NONE
+bind SHIFT-V NONE
 bind SHIFT-MOUSEWHEELUP ACTIONPAGE1
 bind SHIFT-MOUSEWHEELDOWN ACTIONPAGE2
 bind G ACTIONBUTTON10
@@ -60,6 +63,7 @@ bind V MULTIACTIONBAR1BUTTON7
 
 --------------------------------------------------------------------------
 -- 界面设置数据
+-- 这些是直接改全局变量，是否立即生效/保存需要进游戏实测
 --------------------------------------------------------------------------
 
 local UI_SETTINGS = {
@@ -119,25 +123,37 @@ end
 
 --------------------------------------------------------------------------
 -- 1. 键位绑定模块
+-- SetBinding 在“已经是目标状态”时也返回 false，所以先比较再设置
 --------------------------------------------------------------------------
 
 local function ApplyBindings()
-    local okCount, failCount, pluginDependentCount = 0, 0, 0
+    local okCount, sameCount, failCount, pluginDependentCount = 0, 0, 0, 0
     local failedList = {}
 
     for line in RAW_BINDINGS:gmatch("[^\r\n]+") do
         local key, command = ParseBindingLine(line)
         if key then
-            local isClickBinding = command and command:match("^CLICK ") ~= nil
-            local success = SetBinding(key, command)
+            local current = GetBindingAction(key) or ""
+            local target = command or ""
 
-            if success then
-                okCount = okCount + 1
+            if current == target then
+                sameCount = sameCount + 1
             else
-                failCount = failCount + 1
-                failedList[#failedList + 1] = key .. " -> " .. tostring(command)
-                if isClickBinding then
-                    pluginDependentCount = pluginDependentCount + 1
+                local success
+                if command then
+                    success = SetBinding(key, command)
+                else
+                    success = SetBinding(key)
+                end
+
+                if success then
+                    okCount = okCount + 1
+                else
+                    failCount = failCount + 1
+                    failedList[#failedList + 1] = key .. " -> " .. tostring(command)
+                    if command and command:match("^CLICK ") then
+                        pluginDependentCount = pluginDependentCount + 1
+                    end
                 end
             end
         end
@@ -145,7 +161,10 @@ local function ApplyBindings()
 
     SaveBindings(1)
 
-    print(string.format("%s 键位导入完成：成功 %d 条，失败 %d 条", ADDON_PREFIX, okCount, failCount))
+    print(string.format(
+        "%s 键位导入完成：修改 %d 条，原本就一致 %d 条，失败 %d 条",
+        ADDON_PREFIX, okCount, sameCount, failCount
+    ))
 
     if failCount > 0 then
         print("|cffff5555失败明细：|r")
@@ -163,12 +182,18 @@ end
 
 --------------------------------------------------------------------------
 -- 2. 宏创建模块
+-- 同名宏存在就更新内容，不存在才创建，避免重复占满 18 个位置
 --------------------------------------------------------------------------
 
 local function CreateMacroFromEntry(entry)
-    local name, icon, body, bIsLocal, bIsPerCharacter =
+    local name, icon, body, _, bIsPerCharacter =
         entry[1], entry[2], entry[3], entry[4], entry[5]
-    return CreateMacro(name, icon, body, bIsLocal, bIsPerCharacter)
+
+    local index = GetMacroIndexByName(name)
+    if index and index > 0 then
+        return EditMacro(index, name, icon, body)
+    end
+    return CreateMacro(name, icon, body, nil, bIsPerCharacter)
 end
 
 local function CreateClassMacros(macroTable)
@@ -194,11 +219,13 @@ local function ApplyClassMacros()
     end
 
     local macroOk, macroFail = CreateClassMacros(macroTable)
-    print(string.format("%s [%s] 宏创建完成：成功 %d / 失败 %d", ADDON_PREFIX, classToken, macroOk, macroFail))
+    print(string.format("%s [%s] 宏创建/更新完成：成功 %d / 失败 %d", ADDON_PREFIX, classToken, macroOk, macroFail))
 end
 
 --------------------------------------------------------------------------
 -- 3. 宏与技能放置模块
+-- PlaceAction 放进非空格子会把原内容留在光标上，
+-- 而光标非空时 PickupMacro/PickupSpell 什么都不做，所以前后都要 ClearCursor
 --------------------------------------------------------------------------
 
 local function PlaceClassMacros(placementTable)
@@ -210,8 +237,10 @@ local function PlaceClassMacros(placementTable)
     for macroName, place in pairs(placementTable) do
         local index = GetMacroIndexByName(macroName)
         if index and index > 0 then
+            ClearCursor()
             PickupMacro(index)
             PlaceAction(GetActionSlot(place[1], place[2]))
+            ClearCursor()
             okCount = okCount + 1
         else
             failCount = failCount + 1
@@ -220,15 +249,17 @@ local function PlaceClassMacros(placementTable)
     return okCount, failCount
 end
 
+-- 多等级技能取最后一个同名项（按原版顺序即最高等级）
 local function FindSpellBookIndex(spellName)
+    local found
     local index = 1
     while true do
         local name = GetSpellName(index, "spell")
         if not name then
-            return nil
+            return found
         end
         if name == spellName then
-            return index
+            found = index
         end
         index = index + 1
     end
@@ -244,8 +275,10 @@ local function PlaceClassSpells(spellTable)
         local spellName, row, col = spell[1], spell[2], spell[3]
         local spellIndex = FindSpellBookIndex(spellName)
         if spellIndex then
+            ClearCursor()
             PickupSpell(spellIndex, "spell")
             PlaceAction(GetActionSlot(row, col))
+            ClearCursor()
             okCount = okCount + 1
         else
             failCount = failCount + 1
@@ -279,7 +312,7 @@ end
 
 SLASH_MYKEYBINDS1 = "/mkb"
 SlashCmdList["MYKEYBINDS"] = function(msg)
-    msg = string.lower(string.gsub(msg or "", "^%s*(.-)%s*$", "%1"))
+    msg = string.lower((string.gsub(msg or "", "^%s*(.-)%s*$", "%1")))
 
     if msg == "ui" then
         ApplyUISettings()
@@ -293,5 +326,6 @@ SlashCmdList["MYKEYBINDS"] = function(msg)
         ApplyUISettings()
         ApplyBindings()
         ApplyClassMacros()
+        ApplyClassPlacement()
     end
 end

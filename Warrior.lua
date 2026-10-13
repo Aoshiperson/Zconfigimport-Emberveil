@@ -5,7 +5,7 @@ MACROS_BY_CLASS_WARRIOR = {
     { "冲惩", 1, "#showtooltip\n/cast [nocombat]冲锋;[target=mouseover,combat,harm,exists]惩戒痛击;[combat,harm,exists]惩戒痛击", nil, true },
     { "命", 1, "#showtooltip 破釜沉舟\n/castsequence [combat] reset=600 破釜沉舟,盾墙", nil, true },
     { "嘲击", 1, "#showtooltip\n/cast [target=mouseover,combat,harm,exists]嘲讽;[combat,harm,exists]盾击;嘲讽", nil, true },
-    { "英压", 1, "#showtooltip 英勇打击\n/startattack\n/cast 压制\n/cast 英勇打击", nil, true },
+    { "英压", 5, "#showtooltip\n/startattack\n/cast 斩杀\n/cast 压制\n/cast 英勇打击", nil, true },
     { "英复", 1, "#showtooltip 英勇打击\n/startattack\n/cast 复仇\n/cast 英勇打击", nil, true },
     { "狂暴", 1, "#showtooltip 狂暴之怒\n/cast 狂暴之怒\n/cast [stance:3]防御姿态;狂暴姿态", nil, true },
 }
