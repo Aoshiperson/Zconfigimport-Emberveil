@@ -44,7 +44,7 @@ bind SHIFT-MOUSEWHEELDOWN ACTIONPAGE2
 bind G ACTIONBUTTON10
 bind F ACTIONBUTTON7
 bind T ACTIONBUTTON9
-bind B OPENALLBAGS
+bind B TOGGLEBACKPACK
 bind SHIFT-B NONE
 bind F12 TOGGLECHATTAB
 bind O ACTIONBUTTON6
@@ -326,6 +326,5 @@ SlashCmdList["MYKEYBINDS"] = function(msg)
         ApplyUISettings()
         ApplyBindings()
         ApplyClassMacros()
-        ApplyClassPlacement()
     end
 end
